@@ -61,4 +61,27 @@ The files you see here are the same as the ones in the vagrant subdirectory on y
 
 Files in the VM's /vagrant directory are shared with the vagrant folder on your computer. But other data inside the VM is not. For instance, the PostgreSQL database itself lives only inside the VM.
 
+*Instructions for running the project it self*
+After installing all the prerequisites you need to get hold of the project itself,
+you can get it from here: https://github.com/youarefree/fullstack-nanodegree-vm/tree/master/vagrant/catalog
+You can fork it so you can make changes on your own device later on.
+You need to get it to your machine by downloading or in other words cloning it.
+You need to write in your terminal "git clone https://github.com/YOUR-USERNAME/fullstack-nanodegree-vm/tree/master/vagrant/catalog"
+YOUR-USERNAME must be substituted with your username :)
 
+Done that, you need to go to your terminal and cd into the foler of the VAGRANTFILE. There you need to run the commands
+vagrant up 
+vagrant ssh
+In order to get your virtual machine up and running.
+There is a shared folder to which you need to cd in. It is called /vagrant
+There you can find the catalog folder which you also have to cd into. There you can find several python files
+which you have to run with the command python.
+
+You have to run them in the correct order with the command python in front.
+The first one is the database_setup.py and judging by its name it gives a setup of a database and creates it in the same folder.
+The second one is the populateDatabase.py file and also we can find out a bit by its name. It puts some initial data into our database.
+And finally, you can run the ItemCatalog.py file in order to get the website up and running on your local machine, port 5000.
+After which, if you go to your browser and open http://localhost:5000/ you will see the home page of the website in question.
+
+It is supposed to be an item catalog, but its interface is a bit like an Online Store just for kicks :)
+Enjoy.
