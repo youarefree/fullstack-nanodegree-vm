@@ -30,10 +30,11 @@ session = DBSession()
 @app.route('/stores')
 def showStores():
     stores = session.query(Store).all()
-    if login_session['email'] != '':
-        user = getUserInfo(getUserId(login_session['email']))
-        if user.id == 1:
-            return render_template('allStores.html', stores=stores)
+    if login_session.get('email') != None:
+        if login_session['email'] != '':
+            user = getUserInfo(getUserId(login_session['email']))
+            if user.id == 1:
+                return render_template('allStores.html', stores=stores)
     return render_template('allStoresGuest.html', stores=stores)
 
 @app.route('/stores/new')
@@ -69,13 +70,13 @@ def deleteStore(store_id):
 
 @app.route('/stores/<int:store_id>/items')
 def showItems(store_id):
-    print(login_session['email'])
-    if login_session['email'] != '':
-        user = getUserInfo(getUserId(login_session['email']))
-        store = getStore(store_id)
-        creator_id = store.user_id
-        if creator_id == user.id:
-            return render_template('ItemCatalog.html', store = getStore(store_id), items=getItemList(store_id))
+    if login_session.get('email') != None:
+        if login_session['email'] != '':
+            user = getUserInfo(getUserId(login_session['email']))
+            store = getStore(store_id)
+            creator_id = store.user_id
+            if creator_id == user.id:
+                return render_template('ItemCatalog.html', store = getStore(store_id), items=getItemList(store_id))
     return render_template('ItemCatalogGuest.html', store = getStore(store_id), items=getItemList(store_id))
 
 @app.route('/stores/<int:store_id>/additem', methods=['GET', 'POST'])
@@ -92,22 +93,12 @@ def addItem(store_id):
                        description=request.form['description'],
                        price=request.form['price'],
                        picture=picture)
+        if request.files is not None:
+            upload(store_id, newItem)
         session.add(newItem)
         session.commit()
         
         return redirect(url_for('showItems', store_id=store_id))
-    
-@app.route('/stores/<int:store_id>/<int:item_id>/new')
-def newItem(store_id, item_id):
-    if request.method == 'POST':
-        newItem = Item(name=request.form['name'],store_id=store_id)
-        session.add(newItem)
-        session.commit()
-        
-        return redirect(url_for('showItems', store_id=store_id))
-    else:
-        store = getStore(store_id)
-        return render_template('newItem.html', store=store,store_id=store_id)
 
 @app.route('/stores/<int:store_id>/<int:item_id>/edit', methods=['GET','POST'])
 def editItem(store_id, item_id):
@@ -275,7 +266,6 @@ def upload(store_id, item):
         print("folder exist")
     '''
     target = 'static/images'
-    print(target)
     if not os.path.isdir(target):
         os.mkdir(target)
     print(request.form)
@@ -302,6 +292,9 @@ def getItemList(store_id):
 
 def getItem(store_id, item_id):
     return session.query(Item).filter_by(store_id=store_id, id=item_id).one()
+
+def clearSession():
+    login_session.clear()
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
