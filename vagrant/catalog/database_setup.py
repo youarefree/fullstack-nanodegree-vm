@@ -12,6 +12,7 @@ class User(Base):
 
     name =Column(String(80), nullable = False)
     id = Column(Integer, primary_key = True)
+    password = Column(String(250))
     first_name = Column(String(80))
     last_name = Column(String(80))
     picture = Column(String(250))

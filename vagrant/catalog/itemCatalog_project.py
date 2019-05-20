@@ -8,7 +8,7 @@ from flask import session as login_session
 from oauth2client.client import flow_from_clientsecrets
 from oauth2client.client import FlowExchangeError
 
-import os
+import hashlib, binascii, os
 import random, string
 import json
 import requests
@@ -30,16 +30,15 @@ session = DBSession()
 @app.route('/stores')
 def showStores():
     stores = session.query(Store).all()
+    if stores == []:
+        return redirect(url_for('addStore'))
+    print(login_session)
     if login_session.get('email') != None:
         if login_session['email'] != '':
-            user = getUserInfo(getUserId(login_session['email']))
-            if user.id == 1:
-                return render_template('allStores.html', stores=stores)
+            user = getUserInfo(login_session['user_id'])
+            #if user.id == 1:
+            return render_template('allStores.html', stores=stores)
     return render_template('allStoresGuest.html', stores=stores)
-
-@app.route('/stores/new')
-def newStore():
-    return "Create new Store"
 
 @app.route('/stores/<int:store_id>/edit', methods=['GET','POST'])
 def editStore(store_id):
@@ -72,7 +71,8 @@ def deleteStore(store_id):
 def showItems(store_id):
     if login_session.get('email') != None:
         if login_session['email'] != '':
-            user = getUserInfo(getUserId(login_session['email']))
+            user_id = getUserIdbyUsername(login_session['username'])
+            user = getUserInfo(user_id)
             store = getStore(store_id)
             creator_id = store.user_id
             if creator_id == user.id:
@@ -94,11 +94,35 @@ def addItem(store_id):
                        price=request.form['price'],
                        picture=picture)
         if request.files is not None:
-            upload(store_id, newItem)
+            upload(newItem)
         session.add(newItem)
         session.commit()
         
         return redirect(url_for('showItems', store_id=store_id))
+
+@app.route('/stores/new', methods=['GET', 'POST'])
+def addStore():
+    if request.method == 'GET':
+        if login_session.get('email') != None:
+            user_id = getUserId(login_session['email'])
+        else:
+            return redirect(url_for('login'))
+        return render_template('addStore.html', user_id = user_id)
+    else:
+        user_id = getUserId(login_session['email'])
+        picture = request.form['picture']
+        if picture == '':
+            picture = request.form['pictureLocal']
+         
+        newStore = Store(name=request.form['name'],
+                         user_id = user_id,
+                         picture=picture)
+        if request.files is not None:
+            upload(newStore)
+        session.add(newStore)
+        session.commit()
+        
+        return redirect(url_for('showStores'))
 
 @app.route('/stores/<int:store_id>/<int:item_id>/edit', methods=['GET','POST'])
 def editItem(store_id, item_id):
@@ -114,7 +138,7 @@ def editItem(store_id, item_id):
             Item.picture = request.form['picture']
         else:
             if request.files is not None:
-                upload(store_id, Item)
+                upload(Item)
         Item.id=item_id
         Item.store_id=store_id
         session.add(Item)
@@ -142,13 +166,61 @@ def ItemJSON(store_id):
     items = session.query(Item).filter_by(store_id=store_id).all()
     return jsonify(Items=[i.serialize for i in items])
 
-@app.route('/login')
+@app.route('/login', methods=['GET','POST'])
 def login():
-    state = ''.join(random.choice(string.ascii_uppercase + string.
+    if request.method == 'GET':
+        state = ''.join(random.choice(string.ascii_uppercase + string.
+                digits) for x in range(32))
+        login_session['state'] = state
+        return render_template('login.html', STATE=state, CLIENT_ID = CLIENT_ID)
+    else:
+        user = getUserInfo(getUserIdbyUsername(request.form['username']))
+        if verify_password(user.password, request.form['password']):
+            login_session['user_id'] = user.id
+            login_session['username'] = user.name
+            login_session['picture'] = user.picture
+            login_session['email'] = user.email
+            print(login_session)
+            flash("You are logged in as %s" % request.form['username']) 
+            return redirect(url_for('showStores'))
+        else:
+            flash("Password and username did not match") 
+            return render_template('login.html')
+
+@app.route('/createUser', methods=['GET', 'POST'])
+def addUser():
+    if request.method == 'GET':
+        return render_template('addUser.html')
+    else:
+        username = request.form['name']
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+        if password != confirm_password:
+            flash("Password didn't match confirm password")
+            return redirect(url_for('addUser'))
+        email = request.form['email']
+        picture = request.form['picture']
+        if usernameExist(username):
+            flash("Username %s already exists" % username)
+            return redirect(url_for('addUser'))
+        newUser = User(name = username,
+                       password = hashPassword(password),
+                       first_name = request.form['first_name'],
+                       last_name = request.form['last_name'],
+                       picture  = request.form['picture'],
+                       email = email)
+
+        session.add(newUser)
+        session.commit()
+        state = ''.join(random.choice(string.ascii_uppercase + string.
             digits) for x in range(32))
-    print(state)
-    login_session['state'] = state
-    return render_template('login.html', STATE=state, CLIENT_ID = CLIENT_ID)
+        login_session['state'] = state
+        login_session['user_id'] = newUser.id
+        login_session['username'] = username
+        login_session['picture'] = picture
+        login_session['email'] = email
+        flash("you are now logged in as %s" % login_session['username'])
+        return redirect(url_for('showStores'))
 
 @app.route('/gconnect',methods=['POST'])
 def gconnect():
@@ -193,8 +265,6 @@ def gconnect():
     #Check and see if user is already logged 
     stored_credentials = login_session.get('credentials')
     stored_gplus_id = login_session.get('gplus_id')
-    #print(login_session)
-    #print(str(stored_credentials) + '__' + str(gplus_id) + '__' + str(stored_gplus_id))
     if stored_credentials is not None and gplus_id == stored_gplus_id:
         response = make_response(json.dumps('Current user is already logged in'), 200)
         response.headers['Content-Type'] = 'application/json'
@@ -227,30 +297,30 @@ def gconnect():
     login_session['user_id'] = user_id
 
     login_session.modified = True
-    print(login_session)
-    output = ''
-    output += '<h1>Welcome, '
-    output += login_session['username']
-    output += '!</h1>'
-    output += '<img src="'
-    output += login_session['picture']
-    output += ' " style = "width: 300px; height: 300px;border-radius: 150px;-webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
+    
     flash("you are now logged in as %s" % login_session['username'])
     print ("done!")
-    return output
+    return ''
+
+@app.route('/logout')
+def logout():
+    login_session.clear()
+    return redirect(url_for('showStores'))
 
 def createUser(login_session):
     newUser = User(name=login_session['username'], 
-                    email=login_session['email'], picture=login_session['picture'])
+                   email=login_session['email'], picture=login_session['picture'])
     session.add(newUser)
     session.commit()
     user = session.query(User).filter_by(email=login_session['email']).one()
     return user.id
 
-def getUserInfo(user_id):
-    user = session.query(User).filter_by(id=user_id).one()
-    return user
-
+def getUserInfo(user_id): 
+    try:   
+        user = session.query(User).filter_by(id=user_id).one()
+        return user
+    except:
+        return None
 def getUserId(email):
     try:
         user = session.query(User).filter_by(email=email).one()
@@ -258,7 +328,14 @@ def getUserId(email):
     except:
         return None
 
-def upload(store_id, item):
+def getUserIdbyUsername(username):
+    try:
+        user = session.query(User).filter_by(name=username).one()
+        return user.id
+    except:
+        return None
+
+def upload(item):
     
     '''
     # this is to verify that folder to upload to exists.
@@ -268,7 +345,6 @@ def upload(store_id, item):
     target = 'static/images'
     if not os.path.isdir(target):
         os.mkdir(target)
-    print(request.form)
     for upload in request.files.getlist('file'):
         filename = upload.filename
         # This is to verify files are supported
@@ -282,7 +358,25 @@ def upload(store_id, item):
         print("Save it to:", destination)
         upload.save(destination)
         item.picture= '/' + destination
-    return render_template("itemCatalog.html", store=getStore(store_id))
+    #return render_template("itemCatalog.html", store=getStore(store_id))
+
+def hashPassword(password):
+    salt = hashlib.sha256(os.urandom(60)).hexdigest().encode('ascii')
+    pwdhash = hashlib.pbkdf2_hmac('sha512', password.encode('utf-8'), 
+                                salt, 100000)
+    pwdhash = binascii.hexlify(pwdhash)
+    return (salt + pwdhash).decode('ascii')
+
+def verify_password(stored_password, provided_password):
+    """Verify a stored password against one provided by user"""
+    salt = stored_password[:64]
+    stored_password = stored_password[64:]
+    pwdhash = hashlib.pbkdf2_hmac('sha512', 
+                                  provided_password.encode('utf-8'), 
+                                  salt.encode('ascii'), 
+                                  100000)
+    pwdhash = binascii.hexlify(pwdhash).decode('ascii')
+    return pwdhash == stored_password
 
 def getStore(store_id):
     return session.query(Store).filter_by(id=store_id).one()
@@ -293,8 +387,9 @@ def getItemList(store_id):
 def getItem(store_id, item_id):
     return session.query(Item).filter_by(store_id=store_id, id=item_id).one()
 
-def clearSession():
-    login_session.clear()
+def usernameExist(username):
+    return((getUserIdbyUsername(username) is not None))
+
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
