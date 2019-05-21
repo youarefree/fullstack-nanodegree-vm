@@ -31,7 +31,11 @@
 				<li><a href="#">Contact</a></li>
 			</ul>
 			<ul class="nav navbar-nav navbar-right">
+				{% if session['username'] == None %}
+				<li><a href="/login"><span class="glyphicon glyphicon-user"></span> Log In</a></li>
+				{% else %}
 				<li><a href="/logout"><span class="glyphicon glyphicon-log-out"></span> Log out</a></li>
+				{% endif %}
 				<li><a href="#"><span class="glyphicon glyphicon-shopping-cart"></span> Cart</a></li>
 			</ul>
 		</div>
@@ -64,8 +68,12 @@
 					<img src="{{s.picture}}" class="img-responsive" style="width:100%" alt="Image">
 				</div>
 				<div class="panel-footer">
+					{% if session['user_id'] == s.user_id %}
 					<a href="{{url_for('editStore',store_id = s.id)}}"><span class="glyphicon glyphicon-edit"></span>Edit</a>
+					{% endif %}
+					{% if session['user_id'] == s.user_id %}
 					<a href="{{url_for('deleteStore',store_id = s.id)}}"><span class="glyphicon glyphicon-remove"></span> Delete</a>
+					{% endif %}
 					<a href="{{url_for('showItems',store_id = s.id)}}"><span class="glyphicon glyphicon-th"></span> View Items</a>
 				</div>
 			</div>
